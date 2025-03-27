@@ -13,6 +13,7 @@ class Game:
         self.board = Board()
         self.turn = RED_PLAYER
         self.valid_moves = {}
+        self.jumping_piece = None  # Track piece that's in the middle of multiple jumps
 
     def reset(self):
         """Reset the game to initial state."""
@@ -25,6 +26,17 @@ class Game:
         print(f"Piece at position: {piece}")
         print(f"Current turn: {'Red' if self.turn == RED_PLAYER else 'Black'}")
         
+        # If we have a piece that must continue jumping, only allow selecting that piece
+        if self.jumping_piece:
+            # If clicking on a valid move position, allow the move
+            if (row, col) in self.valid_moves:
+                return self._move(row, col)
+            # If clicking on the jumping piece itself, do nothing but keep it selected
+            elif piece == self.jumping_piece:
+                return True
+            # If clicking anywhere else, ignore
+            return False
+            
         if self.selected:
             print(f"Already selected piece: {self.selected}")
             print(f"Valid moves: {self.valid_moves}")
@@ -35,7 +47,6 @@ class Game:
             if not result:
                 self.selected = None
                 # Try selecting a new piece
-                piece = self.board.get_piece(row, col)
                 if piece != 0 and piece.color == self.turn:
                     print(f"Selected new piece: {piece}")
                     self.selected = piece
@@ -43,7 +54,6 @@ class Game:
                     print(f"New valid moves: {self.valid_moves}")
                 return True
         else:
-            piece = self.board.get_piece(row, col)
             if piece != 0 and piece.color == self.turn:
                 print(f"Selected piece: {piece}")
                 self.selected = piece
@@ -57,11 +67,24 @@ class Game:
         """Move a piece if the move is valid."""
         if self.selected and (row, col) in self.valid_moves:
             print(f"Moving piece {self.selected} to ({row}, {col})")
+            # Store if this was a capture move
+            was_capture = abs(row - self.selected.row) == 2
+            
             self.board.move(self.selected, row, col)
             skipped = self.valid_moves.get((row, col), [])
             if skipped:
                 print(f"Captured pieces: {skipped}")
                 self.board.remove(skipped)
+            
+            # Check for additional captures
+            if was_capture:
+                additional_captures = self.board.get_valid_moves(self.selected, must_jump=True)
+                if additional_captures:
+                    self.jumping_piece = self.selected
+                    self.valid_moves = additional_captures
+                    self.selected = self.jumping_piece  # Keep the piece selected
+                    return True
+            
             self._change_turn()
             return True
         return False
@@ -70,6 +93,7 @@ class Game:
         """Switch turns between players."""
         self.valid_moves = {}
         self.selected = None
+        self.jumping_piece = None  # Reset jumping piece when turn changes
         self.turn = BLACK_PLAYER if self.turn == RED_PLAYER else RED_PLAYER
         print(f"\nTurn changed to: {'Red' if self.turn == RED_PLAYER else 'Black'}")
 
